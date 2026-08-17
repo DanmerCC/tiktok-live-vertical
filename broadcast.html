@@ -355,9 +355,10 @@
           const caps = RTCRtpSender.getCapabilities('video');
           addLog('info', 'Codecs video: ' + (caps?.codecs || []).map((c) => c.mimeType).join(', '));
           const h264All = (caps?.codecs || []).filter((c) => c.mimeType.toLowerCase() === 'video/h264');
-          const baseline = h264All.filter((c) => /profile-level-id=42e01f/i.test(c.sdpFmtpLine || ''));
+          const baseline = h264All.filter((c) => /profile-level-id=42/i.test(c.sdpFmtpLine || ''));
           const pref = baseline.length ? baseline : h264All;
           addLog('info', 'H264 elegido: ' + (pref[0]?.sdpFmtpLine || pref[0]?.mimeType || 'ninguno'));
+          logError('h264-elegido', { sdpFmtpLine: pref[0]?.sdpFmtpLine, total: h264All.length, base: baseline.length });
           if (pref.length > 0) vT.setCodecPreferences(pref);
         } catch (e) {
           logError('setCodecPref', { msg: e.message });
@@ -409,6 +410,13 @@
   }
 
   async function toggleCamera() {
+    if (!stream) {
+      try { await startCamera(); } catch (e) {
+        setStatus('Camara bloqueada: ' + e.message);
+        addLog('error', 'Camara bloqueada: ' + e.message);
+      }
+      return;
+    }
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
     const wasLive = live;
     if (live) { pc?.close(); pc = null; live = false; }
@@ -427,10 +435,7 @@
   goBtn.addEventListener('click', goLive);
   camBtn.addEventListener('click', toggleCamera);
 
-  startCamera().catch((e) => {
-    setStatus('Camara bloqueada: ' + e.message);
-    addLog('error', 'Camara bloqueada: ' + e.message);
-  });
+  statusEl.textContent = 'Listo. Pulsa TRANSMITIR (activa la camara)';
 </script>
 </body>
 </html>
