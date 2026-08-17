@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIVE Vertical</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: #0f0f0f;
+    overflow: hidden;
+    font-family: system-ui, sans-serif;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #stage {
+    position: relative;
+    height: 100vh;
+    max-height: 100vh;
+    aspect-ratio: 9 / 16;
+    background: #000;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+    cursor: pointer;
+  }
+
+  #stage video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    object-fit: cover;
+    background: #000;
+  }
+
+  #emojiLayer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 10;
+  }
+
+  .emoji {
+    position: absolute;
+    bottom: -10vh;
+    will-change: transform, opacity;
+    animation-name: floatUp;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  @keyframes floatUp {
+    0%   { transform: translateY(0) scale(0.6) rotate(-8deg); opacity: 0; }
+    10%  { opacity: 1; }
+    85%  { opacity: 1; }
+    100% { transform: translateY(-115vh) scale(1.15) rotate(10deg); opacity: 0; }
+  }
+
+  #hint {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 13px;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 6px 14px;
+    border-radius: 999px;
+    z-index: 50;
+    pointer-events: none;
+    transition: opacity 1s;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <video id="video" muted autoplay playsinline></video>
+  <div id="emojiLayer"></div>
+</div>
+
+<div id="hint">Toca para activar el sonido y pantalla completa</div>
+
+<script src="/hls.js"></script>
+<script>
+  // ===== CONFIG =====
+  const CONFIG = %%CONFIG_OBJ%%;
+
+  const STREAM_URL = CONFIG.streamUrl;
+  const VIDEO_DELAY = CONFIG.delay;
+  const EMOJIS = CONFIG.emojis;
+  const MAX_EMOJIS_DEFAULT = CONFIG.maxEmojis;
+
+  const params = new URLSearchParams(window.location.search);
+  const layer = document.getElementById('emojiLayer');
+
+  // ===== VIDEO (HLS) =====
+  const video = document.getElementById('video');
+  const src = params.get('src') || STREAM_URL;
+  const delayOverride = parseInt(params.get('delay') ?? '', 10);
+
+  async function initVideo() {
+    let delay = Number.isFinite(delayOverride) ? delayOverride : VIDEO_DELAY;
+    try {
+      const res = await fetch('/config');
+      const cfg = await res.json();
+      if (!Number.isFinite(delayOverride) && cfg && typeof cfg.delay === 'number') delay = cfg.delay;
+    } catch {}
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        ...(delay > 0 ? { liveSyncDuration: delay } : {}),
+        maxLiveSyncPlaybackRate: 1.5,
+        backBufferLength: 30,
+      });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      window.__hls = hls;
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = src;
+    }
+  }
+
+  initVideo();
+
+  // ===== EMOJI RAIN =====
+  const EMOJI_POOL = [];
+  let poolCursor = 0;
+  const MAX_EMOJIS = Math.max(1, parseInt(params.get('max') ?? '', 10) || MAX_EMOJIS_DEFAULT);
+
+  function getEmojiEl() {
+    const el = EMOJI_POOL[poolCursor] || (EMOJI_POOL[poolCursor] = document.createElement('span'));
+    el.className = 'emoji';
+    poolCursor = (poolCursor + 1) % EMOJI_POOL.length;
+    return el;
+  }
+
+  function spawnEmoji() {
+    const el = getEmojiEl();
+    el.textContent = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+    el.style.left = `${Math.random() * 90 + 2}%`;
+    el.style.fontSize = `${Math.random() * 30 + 24}px`;
+    el.style.animation = 'none';
+    el.offsetHeight;
+    el.style.animation = `floatUp ${Math.random() * 4 + 3}s linear ${Math.random() * 0.8}s forwards`;
+
+    layer.appendChild(el);
+  }
+
+  function startRain() {
+    if (document.hidden) {
+      layer.replaceChildren();
+      setTimeout(startRain, 1000);
+      return;
+    }
+    if (layer.childElementCount < MAX_EMOJIS) spawnEmoji();
+    setTimeout(startRain, Math.random() * 500 + 250);
+  }
+
+  startRain();
+
+  // ===== FULLSCREEN + SONIDO =====
+  const stage = document.getElementById('stage');
+  const hint = document.getElementById('hint');
+  stage.addEventListener('click', () => {
+    hint.style.opacity = '0';
+    if (video.muted) video.muted = false;
+    if (!document.fullscreenElement) {
+      stage.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  });
+</script>
+</body>
+</html>

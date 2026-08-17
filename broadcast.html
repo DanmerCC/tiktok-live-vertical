@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>TRANSMITIR</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: system-ui, sans-serif;
+    touch-action: manipulation;
+  }
+
+  #preview {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #000;
+    z-index: 0;
+  }
+
+  #status {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    z-index: 999;
+    max-width: 90%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #status.live { background: rgba(220, 38, 38, 0.85); }
+
+  #bottom {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 998;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 24px 0 32px 0;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+  }
+
+  .btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 16px 0;
+    width: 72%;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #goBtn { background: #ef4444; color: #fff; }
+  #goBtn.live { background: #22c55e; }
+
+  #camBtn {
+    background: rgba(255, 255, 255, 0.9);
+    color: #111;
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #panelToggle {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 1001;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 0;
+    background: rgba(255, 255, 255, 0.9);
+    color: #111;
+    font-size: 20px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #panel {
+    position: fixed;
+    top: 68px;
+    right: 12px;
+    z-index: 1000;
+    width: min(300px, 88vw);
+    background: rgba(15, 15, 15, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    color: #fff;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    display: none;
+  }
+  #panel.open { display: block; }
+
+  #panelHeader {
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #bbb;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #panelClose {
+    background: none;
+    border: 0;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 13px;
+  }
+  .row input[type="range"] { flex: 1; }
+  .row .val { min-width: 30px; text-align: right; font-weight: 700; }
+
+  .switch {
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .switch.on { background: #22c55e; color: #fff; }
+  .switch.off { background: #444; color: #fff; }
+
+  #logBox {
+    margin: 4px 12px 12px;
+    padding: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    font-size: 10px;
+    font-family: ui-monospace, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #8ee08e;
+  }
+</style>
+</head>
+<body>
+
+<video id="preview" autoplay playsinline muted></video>
+<div id="status">Esperando permiso de camara...</div>
+
+<button id="panelToggle" title="Controles">⚙️</button>
+<div id="panel">
+  <div id="panelHeader"><span>CONTROLES</span><button id="panelClose">✕</button></div>
+  <div class="row">
+    <span>Micrófono</span>
+    <button id="micBtn" class="switch on">ON</button>
+  </div>
+  <div class="row">
+    <span>Delay transmisión</span>
+    <input id="delayRange" type="range" min="0" max="15" step="1" value="5">
+    <span class="val" id="delayVal">5s</span>
+  </div>
+  <div class="row">
+    <span>Log de errores</span>
+    <button id="logClear" class="switch off">Limpiar</button>
+  </div>
+  <div id="logBox"></div>
+</div>
+
+<div id="bottom">
+  <button id="camBtn">Cambiar camara</button>
+  <button id="goBtn">TRANSMITIR</button>
+</div>
+
+<script>
+  function logError(type, payload) {
+    try {
+      fetch('/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, ...payload }),
+      }).catch(() => {});
+    } catch {}
+    addLog('log', type + ': ' + (payload?.msg || JSON.stringify(payload) || ''));
+  }
+  window.addEventListener('error', (e) => {
+    logError('error', { msg: e.message, stack: e.error?.stack });
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    logError('rejection', { msg: String(e.reason && (e.reason.stack || e.reason.message) || e.reason) });
+  });
+
+  const preview = document.getElementById('preview');
+  const statusEl = document.getElementById('status');
+  const goBtn = document.getElementById('goBtn');
+  const camBtn = document.getElementById('camBtn');
+  const panel = document.getElementById('panel');
+  const panelToggle = document.getElementById('panelToggle');
+  const panelClose = document.getElementById('panelClose');
+  const panelHeader = document.getElementById('panelHeader');
+  const micBtn = document.getElementById('micBtn');
+  const delayRange = document.getElementById('delayRange');
+  const delayVal = document.getElementById('delayVal');
+  const logBox = document.getElementById('logBox');
+  const logClear = document.getElementById('logClear');
+
+  const whipUrl = %%WHIP_URL%%;
+  const PROTOCOL = window.location.protocol;
+  const WHIP_ENDPOINT = whipUrl ? whipUrl : `${PROTOCOL}//${window.location.hostname}:3000/whip`;
+
+  let stream = null;
+  let pc = null;
+  let facingMode = 'environment';
+  let live = false;
+
+  // ===== LOG =====
+  function addLog(level, msg) {
+    const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logBox.textContent = logBox.textContent ? logBox.textContent + '\n' + line : line;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+  logClear.addEventListener('click', () => { logBox.textContent = ''; });
+
+  // ===== PANEL FLOTANTE =====
+  panelToggle.addEventListener('click', () => panel.classList.toggle('open'));
+  panelClose.addEventListener('click', () => panel.classList.remove('open'));
+
+  let dragging = false, offX = 0, offY = 0;
+  panelHeader.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    panelHeader.setPointerCapture(e.pointerId);
+    const r = panel.getBoundingClientRect();
+    offX = e.clientX - r.left;
+    offY = e.clientY - r.top;
+  });
+  panelHeader.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const x = e.clientX - offX;
+    const y = e.clientY - offY;
+    panel.style.left = Math.max(0, Math.min(window.innerWidth - 60, x)) + 'px';
+    panel.style.top = Math.max(0, Math.min(window.innerHeight - 60, y)) + 'px';
+    panel.style.right = 'auto';
+  });
+  panelHeader.addEventListener('pointerup', () => { dragging = false; });
+
+  // ===== CAMARA =====
+  async function startCamera() {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+    preview.srcObject = stream;
+    await preview.play();
+    statusEl.textContent = 'Listo. Pulsa TRANSMITIR';
+  }
+
+  function setStatus(text, liveFlag) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('live', !!liveFlag);
+  }
+
+  // ===== MICROFONO =====
+  micBtn.addEventListener('click', () => {
+    const track = stream?.getAudioTracks()[0];
+    if (!track) { addLog('info', 'Sin pista de audio disponible'); return; }
+    track.enabled = !track.enabled;
+    micBtn.classList.toggle('off', !track.enabled);
+    micBtn.textContent = track.enabled ? 'ON' : 'OFF';
+    addLog('info', 'Microfono ' + (track.enabled ? 'activado' : 'desactivado'));
+  });
+
+  // ===== DELAY =====
+  function applyDelay() {
+    const d = parseInt(delayRange.value, 10) || 0;
+    delayVal.textContent = d + 's';
+    fetch('/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delay: d }),
+    }).catch(() => {});
+  }
+  delayRange.addEventListener('input', applyDelay);
+  fetch('/config')
+    .then((r) => r.json())
+    .then((c) => {
+      if (c && typeof c.delay === 'number') {
+        delayRange.value = c.delay;
+        delayVal.textContent = c.delay + 's';
+      }
+    })
+    .catch(() => {});
+
+  // ===== TRANSMITIR =====
+  async function goLive() {
+    if (live) {
+      if (pc) { pc.close(); pc = null; }
+      live = false;
+      goBtn.textContent = 'TRANSMITIR';
+      goBtn.classList.remove('live');
+      setStatus('Transmision detenida');
+      addLog('info', 'Transmision detenida');
+      return;
+    }
+
+    if (!stream) {
+      try { await startCamera(); } catch (e) {
+        setStatus('Permiso denegado (necesitas HTTPS o el flag de Chrome)');
+        addLog('error', 'Permiso de camara denegado: ' + e.message);
+        return;
+      }
+    }
+
+    setStatus('Conectando a ' + WHIP_ENDPOINT + ' ...');
+    addLog('info', 'Conectando a ' + WHIP_ENDPOINT);
+    try {
+      pc = new RTCPeerConnection();
+
+      const vTrack = stream.getVideoTracks()[0];
+      const aTrack = stream.getAudioTracks()[0];
+      if (vTrack) {
+        const vT = pc.addTransceiver(vTrack, { direction: 'sendonly' });
+        try {
+          const caps = RTCRtpSender.getCapabilities('video');
+          const h264 = caps?.codecs?.filter((c) => c.mimeType.toLowerCase() === 'video/h264');
+          addLog('info', 'Codecs video: ' + (caps?.codecs || []).map((c) => c.mimeType).join(', '));
+          if (h264 && h264.length > 0) vT.setCodecPreferences(h264);
+        } catch (e) {
+          logError('setCodecPref', { msg: e.message });
+        }
+      }
+      if (aTrack) pc.addTransceiver(aTrack, { direction: 'sendonly' });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      await new Promise((resolve) => {
+        if (pc.iceGatheringState === 'complete') return resolve();
+        pc.addEventListener('icegatheringstatechange', () => {
+          if (pc.iceGatheringState === 'complete') resolve();
+        });
+        setTimeout(resolve, 5000);
+      });
+
+      const resp = await fetch(WHIP_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/sdp' },
+        body: pc.localDescription.sdp,
+      });
+      const body = await resp.text();
+
+      if (resp.status !== 201) {
+        throw new Error('HTTP ' + resp.status + ': ' + body.slice(0, 150));
+      }
+
+      await pc.setRemoteDescription({ type: 'answer', sdp: body });
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+          live = true;
+          goBtn.textContent = 'DETENER';
+          goBtn.classList.add('live');
+          setStatus('EN VIVO', true);
+          addLog('ok', 'Conectado y publicando H264+Opus');
+        } else if (pc.connectionState === 'failed') {
+          setStatus('Conexion fallida');
+          addLog('error', 'Conexion fallida');
+        }
+      };
+    } catch (e) {
+      if (pc) { pc.close(); pc = null; }
+      setStatus('Error: ' + e.message);
+      addLog('error', e.message);
+    }
+  }
+
+  async function toggleCamera() {
+    facingMode = facingMode === 'environment' ? 'user' : 'environment';
+    const wasLive = live;
+    if (live) { pc?.close(); pc = null; live = false; }
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
+    try {
+      await startCamera();
+    } catch (e) {
+      setStatus('No se pudo cambiar de camara');
+      addLog('error', 'Cambio de camara fallo: ' + e.message);
+      return;
+    }
+    if (wasLive) goLive();
+  }
+
+  goBtn.addEventListener('click', goLive);
+  camBtn.addEventListener('click', toggleCamera);
+
+  startCamera().catch((e) => {
+    setStatus('Camara bloqueada: ' + e.message);
+    addLog('error', 'Camara bloqueada: ' + e.message);
+  });
+</script>
+</body>
+</html>

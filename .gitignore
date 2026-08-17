@@ -1,0 +1,10 @@
+node_modules/
+mediamtx/
+*.log
+.env
+auto.crt
+auto.key
+server.crt
+server.key
+*.tmp
+Thumbs.db

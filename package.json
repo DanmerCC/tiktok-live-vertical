@@ -1,0 +1,16 @@
+{
+  "name": "tiktok-live",
+  "version": "1.0.0",
+  "description": "Script para conectarse a un live de TikTok usando tiktok-live-connector",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "serve": "node --env-file-if-exists=.env serve.js",
+    "stream": "mediamtx\\mediamtx.exe mediamtx.yml"
+  },
+  "dependencies": {
+    "hls.js": "^1.7.0",
+    "tiktok-live-connector": "^2.0.0"
+  }
+}
