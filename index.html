@@ -81,6 +81,26 @@
     pointer-events: none;
     transition: opacity 1s;
   }
+
+  #vstatus {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    color: #fff;
+    font-size: 11px;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 4px 10px;
+    border-radius: 999px;
+    z-index: 60;
+    pointer-events: none;
+    max-width: 50%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #vstatus.live { background: rgba(34, 197, 94, 0.75); }
+  #vstatus.error { background: rgba(220, 38, 38, 0.85); }
 </style>
 </head>
 <body>
@@ -91,6 +111,7 @@
 </div>
 
 <div id="hint">Toca para activar el sonido y pantalla completa</div>
+<div id="vstatus">Conectando...</div>
 
 <script src="/hls.js"></script>
 <script src="/reactions.js"></script>
@@ -112,6 +133,12 @@
   const delayOverride = parseInt(params.get('delay') ?? '', 10);
 
   async function initVideo() {
+    const vstatus = document.getElementById('vstatus');
+    const setStatus = (t, cls) => {
+      vstatus.textContent = t;
+      vstatus.className = cls || '';
+    };
+
     let delay = Number.isFinite(delayOverride) ? delayOverride : VIDEO_DELAY;
     try {
       const res = await fetch('/config');
@@ -125,6 +152,18 @@
         maxLiveSyncPlaybackRate: 1.5,
         backBufferLength: 30,
       });
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus('Cargando video...'));
+      hls.on(Hls.Events.LEVEL_LOADED, () => setStatus('En directo'));
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        setStatus('Error hls: ' + (data.details || data.type), 'error');
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        }
+      });
+      video.addEventListener('playing', () => setStatus('En directo', 'live'));
+
       hls.loadSource(src);
       hls.attachMedia(video);
       window.__hls = hls;

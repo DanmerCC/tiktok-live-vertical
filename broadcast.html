@@ -112,22 +112,31 @@
     color: #fff;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
     display: none;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
   #panel.open { display: block; }
 
-  #panelHeader {
-    padding: 10px 12px;
+  #panelHandle {
+    padding: 14px 12px;
     font-size: 13px;
     font-weight: 700;
     letter-spacing: 1px;
-    color: #bbb;
-    cursor: move;
+    color: #ddd;
+    cursor: grab;
     display: flex;
     justify-content: space-between;
     align-items: center;
     user-select: none;
     -webkit-user-select: none;
+    background: rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px 14px 0 0;
+    touch-action: none;
   }
+  #panelHandle:active { cursor: grabbing; }
+  #panelHandle .grip { color: #888; font-size: 16px; letter-spacing: 3px; }
   #panelClose {
     background: none;
     border: 0;
@@ -182,7 +191,7 @@
 
 <button id="panelToggle" title="Controles">⚙️</button>
 <div id="panel">
-  <div id="panelHeader"><span>CONTROLES</span><button id="panelClose">✕</button></div>
+  <div id="panelHandle"><span class="grip">⠿</span><span>CONTROLES</span><button id="panelClose">✕</button></div>
   <div class="row">
     <span>Micrófono</span>
     <button id="micBtn" class="switch on">ON</button>
@@ -195,6 +204,10 @@
   <div class="row">
     <span>Log de errores</span>
     <button id="logClear" class="switch off">Limpiar</button>
+  </div>
+  <div class="row">
+    <span>Recargar (sin cache)</span>
+    <button id="refreshBtn" class="switch on">DURO</button>
   </div>
   <div id="logBox"></div>
 </div>
@@ -229,7 +242,7 @@
   const panel = document.getElementById('panel');
   const panelToggle = document.getElementById('panelToggle');
   const panelClose = document.getElementById('panelClose');
-  const panelHeader = document.getElementById('panelHeader');
+  const panelHandle = document.getElementById('panelHandle');
   const micBtn = document.getElementById('micBtn');
   const delayRange = document.getElementById('delayRange');
   const delayVal = document.getElementById('delayVal');
@@ -253,19 +266,26 @@
   }
   logClear.addEventListener('click', () => { logBox.textContent = ''; });
 
-  // ===== PANEL FLOTANTE =====
+  const refreshBtn = document.getElementById('refreshBtn');
+  refreshBtn.addEventListener('click', () => {
+    window.location.href = window.location.pathname + '?v=' + Date.now();
+  });
+
+  // ===== PANEL FLOTANTE (arrastrable) =====
   panelToggle.addEventListener('click', () => panel.classList.toggle('open'));
   panelClose.addEventListener('click', () => panel.classList.remove('open'));
 
   let dragging = false, offX = 0, offY = 0;
-  panelHeader.addEventListener('pointerdown', (e) => {
+  panelHandle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest && e.target.closest('#panelClose')) return;
     dragging = true;
-    panelHeader.setPointerCapture(e.pointerId);
+    panelHandle.setPointerCapture(e.pointerId);
     const r = panel.getBoundingClientRect();
     offX = e.clientX - r.left;
     offY = e.clientY - r.top;
+    e.preventDefault();
   });
-  panelHeader.addEventListener('pointermove', (e) => {
+  panelHandle.addEventListener('pointermove', (e) => {
     if (!dragging) return;
     const x = e.clientX - offX;
     const y = e.clientY - offY;
@@ -273,7 +293,9 @@
     panel.style.top = Math.max(0, Math.min(window.innerHeight - 60, y)) + 'px';
     panel.style.right = 'auto';
   });
-  panelHeader.addEventListener('pointerup', () => { dragging = false; });
+  const endDrag = () => { dragging = false; };
+  panelHandle.addEventListener('pointerup', endDrag);
+  panelHandle.addEventListener('pointercancel', endDrag);
 
   // ===== CAMARA =====
   async function startCamera() {
@@ -292,13 +314,38 @@
   }
 
   // ===== MICROFONO =====
+  let silentCtx = null;
+  function getSilentTrack() {
+    if (!silentCtx) {
+      silentCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const dst = silentCtx.createMediaStreamDestination();
+      const osc = silentCtx.createOscillator();
+      const gain = silentCtx.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain);
+      gain.connect(dst);
+      osc.start();
+      silentCtx.__dst = dst;
+    }
+    return silentCtx.__dst.stream.getAudioTracks()[0];
+  }
+
   micBtn.addEventListener('click', () => {
     const track = stream?.getAudioTracks()[0];
     if (!track) { addLog('info', 'Sin pista de audio disponible'); return; }
-    track.enabled = !track.enabled;
-    micBtn.classList.toggle('off', !track.enabled);
-    micBtn.textContent = track.enabled ? 'ON' : 'OFF';
-    addLog('info', 'Microfono ' + (track.enabled ? 'activado' : 'desactivado'));
+    const wantOff = track.enabled;
+    const sender = pc?.getSenders?.().find((s) => s.track && s.track.kind === 'audio');
+    if (sender) {
+      try {
+        sender.replaceTrack(wantOff ? getSilentTrack() : track);
+      } catch (e) {
+        logError('micReplace', { msg: e.message });
+      }
+    }
+    track.enabled = !wantOff;
+    micBtn.classList.toggle('off', wantOff);
+    micBtn.textContent = wantOff ? 'OFF' : 'ON';
+    addLog('info', 'Microfono ' + (wantOff ? 'desactivado (silencio enviado)' : 'activado'));
   });
 
   // ===== DELAY =====

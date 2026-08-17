@@ -160,6 +160,10 @@ Ejecutar `abrir-puertos.cmd` **como administrador** para abrirlos.
 4. **Bug `""`**: el endpoint WHIP quedaba como el string literal `""` porque se inyectaba `JSON.stringify('')` y la comprobación lo trataba como URL válida → el fetch pedía `/%22%22`.
 5. **Proxy WHIP**: la señalización WebRTC (POST + PATCH trickle-ICE) debe pasar por el mismo origen (3000) porque el navegador no mezcla puertos; si el PATCH no se proxya, ICE nunca conecta ("deadline exceeded").
 6. **VP8 no va a HLS**: Chrome por defecto usa VP8, pero HLS exige H264 → hay que forzar H264 con `transceiver.setCodecPreferences()`. (`codecs` en `addTransceiver` NO funciona en Chrome).
+7. **B-frames rompen el muxer HLS**: si el H264 usa perfil Main/High (con B-frames), MediaMTX muere con "unable to extract DTS: too many reordered frames" y el visor recibe 500/401. → Forzar **perfil Baseline** (familia `profile-level-id=42`: `42001f`/`42e01f`, sin B-frames). Ojo: hay que aceptar TODA la familia `42`, no solo `42e01f`.
+8. **Apagar el mic con `track.enabled=false` rompe el stream**: detiene los paquetes de audio del WebRTC → el track de audio de MediaMTX se queda sin datos → el muxer HLS falla. → Para "silenciar" hay que **reemplazar el track por uno de silencio** (`sender.replaceTrack(trackSilencioso)`), manteniendo el audio vivo. (También evita el loopback).
+9. **La cámara no debe activarse al cargar la página** de emisión: se activa bajo demanda (pulsar TRANSMITIR) para no sorprender con la webcam de la PC.
+10. **Refresh duro**: agregar botón que recargue con `?v=timestamp` para evitar cachés viejas del celular.
 
 ---
 
