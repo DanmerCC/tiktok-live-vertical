@@ -353,9 +353,12 @@
         const vT = pc.addTransceiver(vTrack, { direction: 'sendonly' });
         try {
           const caps = RTCRtpSender.getCapabilities('video');
-          const h264 = caps?.codecs?.filter((c) => c.mimeType.toLowerCase() === 'video/h264');
           addLog('info', 'Codecs video: ' + (caps?.codecs || []).map((c) => c.mimeType).join(', '));
-          if (h264 && h264.length > 0) vT.setCodecPreferences(h264);
+          const h264All = (caps?.codecs || []).filter((c) => c.mimeType.toLowerCase() === 'video/h264');
+          const baseline = h264All.filter((c) => /profile-level-id=42e01f/i.test(c.sdpFmtpLine || ''));
+          const pref = baseline.length ? baseline : h264All;
+          addLog('info', 'H264 elegido: ' + (pref[0]?.sdpFmtpLine || pref[0]?.mimeType || 'ninguno'));
+          if (pref.length > 0) vT.setCodecPreferences(pref);
         } catch (e) {
           logError('setCodecPref', { msg: e.message });
         }

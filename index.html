@@ -134,37 +134,37 @@
   initVideo();
 
   // ===== EMOJI RAIN =====
-  const EMOJI_POOL = [];
-  let poolCursor = 0;
   const MAX_EMOJIS = Math.max(1, parseInt(params.get('max') ?? '', 10) || MAX_EMOJIS_DEFAULT);
-
-  function getEmojiEl() {
-    const el = EMOJI_POOL[poolCursor] || (EMOJI_POOL[poolCursor] = document.createElement('span'));
-    el.className = 'emoji';
-    poolCursor = (poolCursor + 1) % EMOJI_POOL.length;
-    return el;
-  }
+  let activeEmojis = 0;
 
   function spawnEmoji() {
-    const el = getEmojiEl();
+    if (activeEmojis >= MAX_EMOJIS) return;
+
+    const el = document.createElement('span');
+    el.className = 'emoji';
     el.textContent = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
     el.style.left = `${Math.random() * 90 + 2}%`;
     el.style.fontSize = `${Math.random() * 30 + 24}px`;
-    el.style.animation = 'none';
-    el.offsetHeight;
-    el.style.animation = `floatUp ${Math.random() * 4 + 3}s linear ${Math.random() * 0.8}s forwards`;
+    el.style.animation = `floatUp ${Math.random() * 3 + 4}s linear ${Math.random() * 0.8}s forwards`;
 
     layer.appendChild(el);
+    activeEmojis++;
+
+    el.addEventListener('animationend', () => {
+      el.remove();
+      activeEmojis = Math.max(0, activeEmojis - 1);
+    });
   }
 
   function startRain() {
     if (document.hidden) {
       layer.replaceChildren();
+      activeEmojis = 0;
       setTimeout(startRain, 1000);
       return;
     }
-    if (layer.childElementCount < MAX_EMOJIS) spawnEmoji();
-    setTimeout(startRain, Math.random() * 500 + 250);
+    spawnEmoji();
+    setTimeout(startRain, Math.random() * 400 + 200);
   }
 
   startRain();
