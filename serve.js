@@ -74,6 +74,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url === '/reactions.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(readHtml('reactions.js'));
+    return;
+  }
+
   if (url === '/broadcast') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(renderBroadcast());

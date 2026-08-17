@@ -48,11 +48,12 @@
     pointer-events: none;
     overflow: hidden;
     z-index: 10;
+    --emoji-travel: 100vh;
   }
 
   .emoji {
     position: absolute;
-    bottom: -10vh;
+    bottom: -40px;
     will-change: transform, opacity;
     animation-name: floatUp;
     animation-timing-function: linear;
@@ -61,9 +62,9 @@
 
   @keyframes floatUp {
     0%   { transform: translateY(0) scale(0.6) rotate(-8deg); opacity: 0; }
-    10%  { opacity: 1; }
-    85%  { opacity: 1; }
-    100% { transform: translateY(-115vh) scale(1.15) rotate(10deg); opacity: 0; }
+    5%   { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { transform: translateY(calc(-1 * var(--emoji-travel))) scale(1.15) rotate(10deg); opacity: 0; }
   }
 
   #hint {
@@ -92,6 +93,7 @@
 <div id="hint">Toca para activar el sonido y pantalla completa</div>
 
 <script src="/hls.js"></script>
+<script src="/reactions.js"></script>
 <script>
   // ===== CONFIG =====
   const CONFIG = %%CONFIG_OBJ%%;
@@ -133,7 +135,7 @@
 
   initVideo();
 
-  // ===== EMOJI RAIN =====
+  // ===== REACCIONES (via bus de eventos) =====
   const MAX_EMOJIS = Math.max(1, parseInt(params.get('max') ?? '', 10) || MAX_EMOJIS_DEFAULT);
   let activeEmojis = 0;
 
@@ -156,18 +158,36 @@
     });
   }
 
-  function startRain() {
+  // Reaccion 'emoji': lanza `count` emojis al recibir el evento
+  Reactions.register('emoji', (data) => {
+    const count = Math.min(3, Math.max(1, parseInt(data.count, 10) || 1));
+    for (let i = 0; i < count; i++) spawnEmoji();
+  });
+
+  // Fuente aleatoria: emite eventos 'reaction' al bus (por ahora los aleatorios)
+  function randomReactionSource() {
     if (document.hidden) {
       layer.replaceChildren();
       activeEmojis = 0;
-      setTimeout(startRain, 1000);
+      setTimeout(randomReactionSource, 1000);
       return;
     }
-    spawnEmoji();
-    setTimeout(startRain, Math.random() * 400 + 200);
+    EventBus.emit('reaction', { type: 'emoji' });
+    setTimeout(randomReactionSource, Math.random() * 400 + 200);
   }
 
-  startRain();
+  randomReactionSource();
+
+  // Expuesto para debug / futuros orígenes (p. ej. chat de TikTok):
+  //   EventBus.emit('reaction', { type: 'emoji', count: 3 });
+  window.__bus = EventBus;
+  window.__reactions = Reactions;
+
+  function updateEmojiTravel() {
+    layer.style.setProperty('--emoji-travel', layer.clientHeight + 'px');
+  }
+  updateEmojiTravel();
+  window.addEventListener('resize', updateEmojiTravel);
 
   // ===== FULLSCREEN + SONIDO =====
   const stage = document.getElementById('stage');
