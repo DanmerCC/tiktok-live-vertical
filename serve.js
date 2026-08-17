@@ -22,7 +22,7 @@ const hlsJs = fs.readFileSync(path.join(__dirname, 'node_modules', 'hls.js', 'di
 const publisherJs = fs.readFileSync(path.join(__dirname, 'publisher.js'));
 
 const DEFAULTS = {
-  streamUrl: '/hls/live/stream/index.m3u8',
+  streamUrl: '/hls/live/clean/index.m3u8',
   delay: 5,
   emojis: ['🔥', '😍', '😂', '👍', '❤️', '😮', '👏', '😭', '🎉', '🙌', '💯', '🤩'],
   maxEmojis: 10,
