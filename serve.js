@@ -22,7 +22,7 @@ const hlsJs = fs.readFileSync(path.join(__dirname, 'node_modules', 'hls.js', 'di
 const publisherJs = fs.readFileSync(path.join(__dirname, 'publisher.js'));
 
 const DEFAULTS = {
-  streamUrl: 'http://localhost:8888/live/stream/index.m3u8',
+  streamUrl: '/hls/live/stream/index.m3u8',
   delay: 5,
   emojis: ['🔥', '😍', '😂', '👍', '❤️', '😮', '👏', '😭', '🎉', '🙌', '💯', '🤩'],
   maxEmojis: 10,
@@ -132,6 +132,43 @@ const server = http.createServer((req, res) => {
       json(res, 502, { status: 'error', error: 'proxy error' });
     });
     req.pipe(proxyReq);
+    return;
+  }
+
+  if (url.startsWith('/hls/')) {
+    const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    const targetPath = url.slice('/hls'.length);
+    const doProxy = (req2, res2, extraQuery) => {
+      const proxyReq = http.request(
+        {
+          host: '127.0.0.1',
+          port: 8888,
+          path: targetPath + extraQuery + query,
+          method: req2.method,
+          headers: { ...req2.headers, host: '127.0.0.1:8888' },
+        },
+        (proxyRes) => {
+          logToFile('hls.log', `[${new Date().toISOString()}] ${req2.method} ${targetPath}${extraQuery}${query} -> ${proxyRes.statusCode}\n`);
+          if (proxyRes.statusCode === 302 && proxyRes.headers.location && !extraQuery) {
+            proxyRes.resume();
+            const loc = new URL(proxyRes.headers.location, 'http://127.0.0.1:8888');
+            doProxy(req2, res2, '?' + loc.search.slice(1));
+            return;
+          }
+          res2.writeHead(proxyRes.statusCode, proxyRes.headers);
+          proxyRes.pipe(res2);
+        },
+      );
+      proxyReq.on('error', () => {
+        json(res2, 502, { status: 'error', error: 'proxy error' });
+      });
+      if (req2.method !== 'GET' && req2.method !== 'HEAD') {
+        req2.pipe(proxyReq);
+      } else {
+        proxyReq.end();
+      }
+    };
+    doProxy(req, res, '');
     return;
   }
 

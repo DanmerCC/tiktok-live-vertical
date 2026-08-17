@@ -155,8 +155,28 @@
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus('Cargando video...'));
       hls.on(Hls.Events.LEVEL_LOADED, () => setStatus('En directo'));
+      let lastReload = 0;
       hls.on(Hls.Events.ERROR, (_e, data) => {
-        setStatus('Error hls: ' + (data.details || data.type), 'error');
+        const d = data.details || data.type;
+        setStatus('Error hls: ' + d, 'error');
+
+        const sessionIssue =
+          d === 'audioTrackLoadError' ||
+          d === 'levelLoadError' ||
+          d === 'manifestLoadError';
+
+        if (sessionIssue) {
+          const now = Date.now();
+          if (now - lastReload > 10000) {
+            lastReload = now;
+            setStatus('Reconectando...', '');
+            setTimeout(() => {
+              try { hls.loadSource(src); } catch {}
+            }, 1200);
+          }
+          return;
+        }
+
         if (data.fatal) {
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
           else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
@@ -173,6 +193,33 @@
   }
 
   initVideo();
+
+  // ===== VIGILANTE ANTI-CONGELAMIENTO =====
+  let lastTime = video.currentTime;
+  let stuckFor = 0;
+  setInterval(() => {
+    if (video.paused || video.readyState < 2) return;
+    const advancing = Math.abs(video.currentTime - lastTime) > 0.05;
+    if (advancing) {
+      stuckFor = 0;
+      lastTime = video.currentTime;
+      return;
+    }
+    stuckFor += 2;
+    if (stuckFor >= 6) {
+      stuckFor = 0;
+      try {
+        const b = video.buffered;
+        if (b.length) {
+          video.currentTime = b.end(b.length - 1) - 0.2;
+        }
+        window.__hls?.recoverMediaError();
+        video.play().catch(() => {});
+        const s = document.getElementById('vstatus');
+        if (s) { s.textContent = 'Recuperado'; s.className = ''; }
+      } catch {}
+    }
+  }, 2000);
 
   // ===== REACCIONES (via bus de eventos) =====
   const MAX_EMOJIS = Math.max(1, parseInt(params.get('max') ?? '', 10) || MAX_EMOJIS_DEFAULT);
