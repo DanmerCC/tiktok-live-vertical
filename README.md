@@ -66,7 +66,9 @@ flowchart LR
     subgraph PC Windows
         S[serve.js :3000] --> W[proxy /whip]
         W --> M[MediaMTX]
-        M --> HLS[HLS :8888]
+        M -->|raw| F[ffmpeg transcode]
+        F -->|limpio| M2[live/clean]
+        M2 --> HLS[HLS :8888]
         M --> RTMP[RTMP :1935]
         M --> WR[WebRTC :8889]
         M --> ICE[UDP :8189]
@@ -78,6 +80,17 @@ flowchart LR
     WHIP -->|oferta SDP| W
     RTMP <-->|entrada alternativa| M
 ```
+
+### Transcodificación con ffmpeg (¿por qué?)
+
+El celular publica por WebRTC a `live/stream` **en bruto**. El muxer HLS de MediaMTX es frágil ante streams con reordenamiento o tropiezos del encoder (B-frames, autofocus, paquetes perdidos) → muere con `too many reordered frames` → el visor recibe 500/401.
+
+La solución: cuando `live/stream` se pone en línea, MediaMTX dispara **`runOnOnline` → ffmpeg**, que:
+1. **Lee** el stream por RTSP (`rtsp://127.0.0.1:8554/live/stream`).
+2. **Recodifica** a H264 **Baseline limpio** (sin B-frames, keyframe cada 30 frames, `-tune zerolatency`).
+3. **Publica** por RTMP a `live/clean`.
+
+El visor reproduce `live/clean` (siempre limpio), y MediaMTX apaga ffmpeg con SIGINT cuando el stream original deja de estar online.
 
 ## 3. Secuencia de una transmisión
 
@@ -164,6 +177,8 @@ Ejecutar `abrir-puertos.cmd` **como administrador** para abrirlos.
 8. **Apagar el mic con `track.enabled=false` rompe el stream**: detiene los paquetes de audio del WebRTC → el track de audio de MediaMTX se queda sin datos → el muxer HLS falla. → Para "silenciar" hay que **reemplazar el track por uno de silencio** (`sender.replaceTrack(trackSilencioso)`), manteniendo el audio vivo. (También evita el loopback).
 9. **La cámara no debe activarse al cargar la página** de emisión: se activa bajo demanda (pulsar TRANSMITIR) para no sorprender con la webcam de la PC.
 10. **Refresh duro**: agregar botón que recargue con `?v=timestamp` para evitar cachés viejas del celular.
+11. **La sesión HLS de MediaMTX caduca**: cada manifiesto crea una sesión; si el stream se reinicia o la sesión expira, MediaMTX responde 401/500. → hls.js debe **recargar el manifiesto** al detectar `audioTrackLoadError`/`levelLoadError`/`manifestLoadError`.
+12. **Transcodificar con ffmpeg** cuando el muxer falla: re-codificar el stream (WebRTC bruto → H264 Baseline limpio) vía `runOnOnline` de MediaMTX elimina los tropiezos del muxer HLS.
 
 ---
 
